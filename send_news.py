@@ -34,14 +34,14 @@ def build_news_items():
 
     # HTML header greeting
     html = ""
-    html += "<p style=\"color:#666; text-align:center; margin-bottom:20px; font-size:16px;\">Good morning! Here is your news briefing for today.</p>"
+    html += '<p style="color:#666; text-align:center; margin-bottom:20px; font-size:16px;">Good morning! Here is your news briefing for today.</p>'
 
     # TTS script greeting
     script_lines = [greeting_before, ""]
 
     def add_section(title: str, entries, limit: int):
         nonlocal html
-        html += f"<h2 style=\"color:#0056b3; border-bottom:1px solid #e0e0e0;\">{title}</h2>"
+        html += f'<h2 style="color:#0056b3; border-bottom:1px solid #e0e0e0;">{title}</h2>'
         script_lines.append(title)
 
         for entry in (entries or [])[:limit]:
@@ -74,7 +74,7 @@ def build_news_items():
     add_section("National", getattr(nat_feed, "entries", []), 15)
 
     # closing greetings
-    html += "<p style=\"color:#666; text-align:center; margin-top:25px; font-size:14px;\">That’s all for now — have a great day.</p>"
+    html += '<p style="color:#666; text-align:center; margin-top:25px; font-size:14px;">That’s all for now — have a great day.</p>'
     script_lines.append(greeting_after)
 
     return {
@@ -121,7 +121,7 @@ def synthesize_mp3_with_edge_tts(text: str) -> bytes:
             return f.read()
 
 
-def send_email(news_html: str, audio_mp3_bytes: bytes):
+def send_email(news_html: str, audio_mp3_bytes: bytes | None = None):
     if not all([SENDER_EMAIL, SENDER_PASSWORD, RECEIVER_EMAIL]):
         print("Email credentials are not set properly.")
         return
@@ -152,10 +152,11 @@ def send_email(news_html: str, audio_mp3_bytes: bytes):
     # HTML part
     msg.attach(MIMEText(body, "html"))
 
-    # Attach MP3
-    attachment = MIMEApplication(audio_mp3_bytes, _subtype="mpeg")
-    attachment.add_header("Content-Disposition", "attachment", filename=AUDIO_FILENAME)
-    msg.attach(attachment)
+    # Attach MP3 (optional)
+    if audio_mp3_bytes:
+        attachment = MIMEApplication(audio_mp3_bytes, _subtype="mpeg")
+        attachment.add_header("Content-Disposition", "attachment", filename=AUDIO_FILENAME)
+        msg.attach(attachment)
 
     try:
         server = smtplib.SMTP("smtp.gmail.com", 587)
@@ -170,5 +171,12 @@ def send_email(news_html: str, audio_mp3_bytes: bytes):
 
 if __name__ == "__main__":
     news = build_news_items()
-    audio = synthesize_mp3_with_edge_tts(news["script"])
+
+    audio: bytes | None = None
+    try:
+        audio = synthesize_mp3_with_edge_tts(news["script"])
+    except RuntimeError as e:
+        # Avoid failing the whole workflow if TTS isn't available for any reason.
+        print(f"TTS generation failed; sending email without audio. Reason: {e}")
+
     send_email(news["html"], audio)
